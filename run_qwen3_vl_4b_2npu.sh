@@ -5,7 +5,6 @@ set -x
 # ============================================================
 export ASCEND_RT_VISIBLE_DEVICES=4,5
 export USE_OPTIMIZED_MODEL=0
-export RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES=1
 
 # ============================================================
 # 并行配置
