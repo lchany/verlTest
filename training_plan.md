@@ -71,12 +71,12 @@ export VLLM_ATTENTION_BACKEND=XFORMERS
 # ============================================================
 # ① 模型路径（填写 Qwen3-VL-30B-A3B-Instruct 的实际路径）
 # ============================================================
-MODEL_PATH=${MODEL_PATH:-"/请填写/Qwen3-VL-30B-A3B-Instruct"}
+MODEL_PATH=${MODEL_PATH:-"/home/l30002999/Qwen3-VL-30B-A3B-Instruct"}
 
 # ============================================================
 # ② checkpoint 保存路径
 # ============================================================
-CKPTS_DIR=${CKPTS_DIR:-"/请填写/ckpts/GRPO-Qwen3_vl/GRPO-Qwen3_vl-30B-4npu-lora"}
+CKPTS_DIR=${CKPTS_DIR:-"/data/nfs/l30002999/checkpoints/qwen3vl_30b_grpo"}
 
 # ============================================================
 # 数据集路径（已确认）
