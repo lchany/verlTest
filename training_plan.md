@@ -1,4 +1,4 @@
-# Qwen3-VL-30B-A3B-Instruct GRPO 强化训练计划（4 卡 NPU + LoRA）
+# Qwen3-VL-30B-A3B-Instruct GRPO 强化训练计划（4 卡 NPU）
 
 ## 硬件配置
 
@@ -6,16 +6,6 @@
 - 显存：64GB / 卡
 - 使用卡号：NPU 4、5、6、7（后 4 张）
 - 总显存：256GB
-
-## 显存估算（LoRA 方案）
-
-| 组件 | 显存/卡 |
-|------|--------|
-| 基础模型权重（FSDP 分片，4 卡） | ~15GB |
-| LoRA 优化器状态（极小） | < 1GB |
-| vLLM 推理引擎（TP=4） | ~15GB |
-| 激活值 + KV 缓存 | ~20GB |
-| **合计** | **~51GB ✅** |
 
 ---
 
@@ -54,9 +44,7 @@ pip install -v -e .
 
 ---
 
-## 三、训练脚本（4 卡 LoRA 版，使用 NPU 4-7）
-
-将以下内容保存为 `run_qwen3_vl_30b_4npu_lora.sh`，**填写 ① ② 变量**后运行。
+## 三、训练脚本（基于官方 NPU 脚本，仅适配 4 卡）
 
 ```bash
 set -x
@@ -66,26 +54,34 @@ set -x
 # ============================================================
 export ASCEND_RT_VISIBLE_DEVICES=4,5,6,7
 export USE_OPTIMIZED_MODEL=0
-export VLLM_ATTENTION_BACKEND=XFORMERS
 
 # ============================================================
-# ① 模型路径（填写 Qwen3-VL-30B-A3B-Instruct 的实际路径）
+# 并行配置
 # ============================================================
-MODEL_PATH=${MODEL_PATH:-"/home/l30002999/Qwen3-VL-30B-A3B-Instruct"}
+gen_tp=4        # 原版：8，改为与卡数一致
+sp_size=1       # 原版：2，4 卡无需序列并行
+
+ENGINE=${1:-vllm}
 
 # ============================================================
-# ② checkpoint 保存路径
+# 路径配置
 # ============================================================
-CKPTS_DIR=${CKPTS_DIR:-"/data/nfs/l30002999/checkpoints/qwen3vl_30b_grpo"}
-
-# ============================================================
-# 数据集路径（已确认）
-# ============================================================
+MODEL_PATH=/home/l30002999/Qwen3-VL-30B-A3B-Instruct
+CKPTS_DIR=/data/nfs/l30002999/checkpoints/qwen3vl_30b_grpo
 TRAIN_FILE=/data/nfs/trainning/datasets/performance/geo3k/train.parquet
 TEST_FILE=/data/nfs/trainning/datasets/performance/geo3k/test.parquet
 
 project_name='GRPO-Qwen3_vl'
-exp_name='GRPO-Qwen3_vl-30B-4npu-lora'
+exp_name='GRPO-Qwen3_vl-30B-4npu'
+
+# ============================================================
+# Rollout Correction 参数（与原版保持一致）
+# ============================================================
+rollout_is=sequence
+rollout_is_threshold=2.0
+rollout_is_batch_normalize=true
+rollout_rs=token_k1
+rollout_rs_threshold=0.6_1.6
 
 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
@@ -99,12 +95,9 @@ python3 -m verl.trainer.main_ppo \
     data.image_key=images \
     actor_rollout_ref.model.path=${MODEL_PATH} \
     actor_rollout_ref.model.use_remove_padding=True \
+    actor_rollout_ref.model.use_fused_kernels=True \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
-    actor_rollout_ref.model.lora_rank=16 \
-    actor_rollout_ref.model.lora_alpha=32 \
-    actor_rollout_ref.model.target_modules=all-linear \
-    actor_rollout_ref.model.exclude_modules='.*visual.*' \
-    actor_rollout_ref.actor.optim.lr=3e-6 \
+    actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.actor.ppo_mini_batch_size=32 \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=2 \
     actor_rollout_ref.actor.use_kl_loss=True \
@@ -114,32 +107,35 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.strategy=fsdp2 \
     actor_rollout_ref.actor.fsdp_config.fsdp_size=4 \
     actor_rollout_ref.actor.fsdp_config.reshard_after_forward=True \
-    actor_rollout_ref.actor.fsdp_config.param_offload=False \
-    actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
+    actor_rollout_ref.actor.fsdp_config.entropy_checkpointing=True \
+    actor_rollout_ref.actor.entropy_from_logits_with_chunking=True \
+    actor_rollout_ref.actor.ulysses_sequence_parallel_size=${sp_size} \
+    actor_rollout_ref.actor.fsdp_config.param_offload=True \
+    actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
     actor_rollout_ref.actor.fsdp_config.forward_prefetch=True \
-    actor_rollout_ref.actor.ulysses_sequence_parallel_size=1 \
     actor_rollout_ref.ref.fsdp_config.reshard_after_forward=True \
-    actor_rollout_ref.ref.fsdp_config.param_offload=True \
     actor_rollout_ref.ref.fsdp_config.forward_prefetch=True \
-    actor_rollout_ref.ref.ulysses_sequence_parallel_size=1 \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=2 \
-    actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.tensor_model_parallel_size=4 \
-    actor_rollout_ref.rollout.max_num_batched_tokens=16000 \
+    actor_rollout_ref.ref.entropy_from_logits_with_chunking=True \
+    actor_rollout_ref.ref.ulysses_sequence_parallel_size=${sp_size} \
+    actor_rollout_ref.ref.fsdp_config.param_offload=True \
+    actor_rollout_ref.rollout.name=${ENGINE} \
+    actor_rollout_ref.rollout.max_num_batched_tokens=20000 \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=2 \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=${gen_tp} \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.mm_processor_cache_gb=0 \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.85 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.8 \
     actor_rollout_ref.rollout.enable_chunked_prefill=True \
     actor_rollout_ref.rollout.enforce_eager=False \
     actor_rollout_ref.rollout.free_cache_engine=True \
     actor_rollout_ref.rollout.n=5 \
-    actor_rollout_ref.rollout.calculate_log_probs=True \
     algorithm.use_kl_in_reward=False \
-    algorithm.rollout_correction.rollout_is=sequence \
-    algorithm.rollout_correction.rollout_is_threshold=2.0 \
-    algorithm.rollout_correction.rollout_is_batch_normalize=true \
-    algorithm.rollout_correction.rollout_rs=token_k1 \
-    algorithm.rollout_correction.rollout_rs_threshold=0.6_1.6 \
+    algorithm.rollout_correction.rollout_is=${rollout_is} \
+    algorithm.rollout_correction.rollout_is_threshold=${rollout_is_threshold} \
+    algorithm.rollout_correction.rollout_is_batch_normalize=${rollout_is_batch_normalize} \
+    algorithm.rollout_correction.rollout_rs=${rollout_rs} \
+    algorithm.rollout_correction.rollout_rs_threshold=${rollout_rs_threshold} \
+    actor_rollout_ref.rollout.calculate_log_probs=True \
     trainer.critic_warmup=0 \
     trainer.logger='["console", "wandb"]' \
     trainer.project_name="${project_name}" \
@@ -156,31 +152,26 @@ python3 -m verl.trainer.main_ppo \
 
 ---
 
-## 四、运行方式
+## 四、与原版脚本的差异（仅 4 卡适配）
 
-```bash
-MODEL_PATH=/实际/模型/路径 \
-CKPTS_DIR=/实际/checkpoint/路径 \
-bash run_qwen3_vl_30b_4npu_lora.sh
-```
-
----
-
-## 五、LoRA 配置说明
-
-| 参数 | 值 | 说明 |
-|------|-----|------|
-| `lora_rank` | 16 | LoRA 秩，越大效果越好但越占显存 |
-| `lora_alpha` | 32 | 缩放系数，通常设为 rank 的 2 倍 |
-| `target_modules` | all-linear | 对所有线性层加 LoRA |
-| `exclude_modules` | `.*visual.*` | 排除视觉编码器，只训练语言模型部分 |
-| `param_offload` | False | LoRA 后优化器极小，无需卸载 |
-| `optimizer_offload` | False | 同上，保持速度 |
-| `ref.param_offload` | True | Reference 模型卸载到 CPU |
+| 参数 | 原版（32卡） | 适配版（4卡） |
+|------|------------|------------|
+| `ASCEND_RT_VISIBLE_DEVICES` | 无 | `4,5,6,7` |
+| `USE_OPTIMIZED_MODEL` | 无 | `0`（RL训练必须关闭） |
+| `gen_tp` | 8 | **4** |
+| `sp_size` | 2 | **1** |
+| `fsdp_size` | 32 | **4** |
+| `train_batch_size` | 512 | **128** |
+| `ppo_mini_batch_size` | 128 | **32** |
+| `ppo_micro_batch_size_per_gpu` | 10 | **2** |
+| `actor.param_offload` | False | **True** |
+| `actor.optimizer_offload` | False | **True** |
+| `trainer.n_gpus_per_node` | 16 | **4** |
+| `trainer.nnodes` | 2 | **1** |
 
 ---
 
-## 六、OOM 应急处理
+## 五、OOM 应急处理
 
 如果出现显存不足，按顺序尝试：
 
@@ -193,14 +184,11 @@ actor_rollout_ref.rollout.n=3
 
 # 第三步：缩短响应长度
 data.max_response_length=1024
-
-# 第四步：降低 vLLM 显存占比
-actor_rollout_ref.rollout.gpu_memory_utilization=0.75
 ```
 
 ---
 
-## 七、观察训练是否正常
+## 六、观察训练是否正常
 
 ```
 train/reward_score  → 应逐步上升（说明模型在学习）
