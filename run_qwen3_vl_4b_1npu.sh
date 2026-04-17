@@ -5,6 +5,7 @@ set -x
 # ============================================================
 export ASCEND_RT_VISIBLE_DEVICES=4
 export USE_OPTIMIZED_MODEL=0
+export VLLM_VERSION=0.11.0
 
 # ============================================================
 # 并行配置
