@@ -65,6 +65,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
     actor_rollout_ref.actor.fsdp_config.forward_prefetch=True \
     +actor_rollout_ref.actor.ascend_hccl_buffer_size=200 \
+    +actor_rollout_ref.actor.ascend_cpu_bind=False \
     actor_rollout_ref.ref.fsdp_config.reshard_after_forward=True \
     actor_rollout_ref.ref.fsdp_config.forward_prefetch=True \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
