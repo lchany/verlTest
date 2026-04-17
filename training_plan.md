@@ -54,6 +54,7 @@ set -x
 # ============================================================
 export ASCEND_RT_VISIBLE_DEVICES=4,5,6,7
 export USE_OPTIMIZED_MODEL=0
+export RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES=1
 
 # ============================================================
 # 并行配置
@@ -140,6 +141,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.logger='["console", "wandb"]' \
     trainer.project_name="${project_name}" \
     trainer.experiment_name="${exp_name}" \
+    trainer.device=npu \
     trainer.n_gpus_per_node=4 \
     trainer.nnodes=1 \
     trainer.default_local_dir=${CKPTS_DIR} \
@@ -158,6 +160,7 @@ python3 -m verl.trainer.main_ppo \
 |------|------------|------------|
 | `ASCEND_RT_VISIBLE_DEVICES` | 无 | `4,5,6,7` |
 | `USE_OPTIMIZED_MODEL` | 无 | `0`（RL训练必须关闭） |
+| `RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES` | 无 | `1`（避免 Ray 覆盖 NPU 可见卡） |
 | `gen_tp` | 8 | **4** |
 | `sp_size` | 2 | **1** |
 | `fsdp_size` | 32 | **4** |
@@ -168,6 +171,7 @@ python3 -m verl.trainer.main_ppo \
 | `actor.optimizer_offload` | False | **True** |
 | `trainer.n_gpus_per_node` | 16 | **4** |
 | `trainer.nnodes` | 2 | **1** |
+| `trainer.device` | 自动识别 | **npu**（显式指定，避免误走 GPU 资源） |
 
 ---
 
