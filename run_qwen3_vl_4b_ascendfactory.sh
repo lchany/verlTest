@@ -9,8 +9,8 @@ ascendfactory-cli train /home/l30002999/yaml/verl_qwen3_vl-4b_ppo_fsdp.yaml \
     --backend_config.actor_rollout_ref.model.path=/data/nfs/model/Qwen3-VL-4B-Instruct \
     --backend_config.data.train_files=/data/nfs/trainning/datasets/performance/geo3k/train.parquet \
     --backend_config.data.val_files=/data/nfs/trainning/datasets/performance/geo3k/test.parquet \
-    --backend_config.trainer.save_freq=-1 \
-    --backend_config.trainer.total_training_steps=5 \
+    --backend_config.trainer.save_freq=50 \
+    --backend_config.trainer.total_training_steps=-1 \
     --af_output_dir=/data/nfs/l30002999/checkpoints/output/qwen3vl_4b_grpo_2npu \
     --env.MASTER_ADDR=localhost \
     --env.NNODES=1 \
