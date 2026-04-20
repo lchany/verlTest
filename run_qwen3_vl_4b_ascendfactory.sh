@@ -12,6 +12,7 @@ ascendfactory-cli train /home/l30002999/verl_qwen3_vl-4b_ppo_fsdp.yaml \
     --backend_config.data.train_files=/data/nfs/trainning/datasets/performance/geo3k/train.parquet \
     --backend_config.data.val_files=/data/nfs/trainning/datasets/performance/geo3k/test.parquet \
     --backend_config.trainer.save_freq=50 \
+    --backend_config.trainer.test_freq=100000 \
     --backend_config.actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=2 \
     --backend_config.actor_rollout_ref.ref.fsdp_config.param_offload=False \
     --backend_config.actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=16 \
